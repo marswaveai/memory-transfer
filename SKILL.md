@@ -12,11 +12,11 @@ description: |
 
 ## 原理
 
-用户在其他 AI 助手（ChatGPT、Gemini 等）上积累了大量个性化数据：记忆、偏好、写作风格、工作流程。换助手时，这些数据不应丢失。
+用户在其他 AI 助手上积累了大量个性化数据：记忆、偏好、写作风格、工作流程。换助手时，这些数据不应丢失。
 
-记忆迁移通过两步完成：
-1. 在旧 Agent 中用特定 prompt 导出所有记忆
-2. 新 Agent 接收、清洗、整合到自己的 Memory 系统中
+记忆迁移有两条路径：
+- **本地 Agent**（Claude Code、Cursor、Windsurf 等）：直接读取本地文件，零操作
+- **云端 Agent**（ChatGPT、Gemini 等）：通过 prompt 导出，用户复制回来
 
 ## 流程
 
@@ -25,16 +25,61 @@ description: |
 问用户：
 
 > 你之前用的是哪个 AI 助手？
-> - ChatGPT
-> - Gemini
-> - Copilot
-> - Claude（其他实例）
-> - Perplexity
-> - 其他
 
-根据来源选择对应的导出 prompt。
+根据来源自动选择迁移路径。
 
-### Step 2：引导用户导出记忆
+### Step 2：提取记忆
+
+#### 路径 A：本地 Agent（自动提取，用户无需操作）
+
+直接扫描本地文件系统，提取记忆数据。
+
+**Claude Code：**
+```bash
+# 全局配置
+cat ~/.claude/CLAUDE.md 2>/dev/null
+cat ~/.claude/settings.json 2>/dev/null
+
+# 所有项目的记忆
+find ~/.claude/projects -name "*.md" -path "*/memory/*" 2>/dev/null | while read f; do
+  echo "--- $f ---"
+  cat "$f"
+done
+
+# 项目列表（了解用户做过什么）
+ls ~/.claude/projects/ 2>/dev/null
+```
+
+**Cursor：**
+```bash
+# Cursor 规则文件
+cat ~/.cursor/rules/*.md 2>/dev/null
+cat .cursorrules 2>/dev/null
+
+# 项目级规则
+find ~ -maxdepth 4 -name ".cursorrules" 2>/dev/null | while read f; do
+  echo "--- $f ---"
+  cat "$f"
+done
+```
+
+**Windsurf：**
+```bash
+cat ~/.windsurf/rules/*.md 2>/dev/null
+cat .windsurfrules 2>/dev/null
+```
+
+**通用（任何使用 AGENT.md / CLAUDE.md 的工具）：**
+```bash
+find ~ -maxdepth 4 -name "AGENT.md" -o -name "CLAUDE.md" 2>/dev/null | while read f; do
+  echo "--- $f ---"
+  cat "$f"
+done
+```
+
+提取完成后直接进入 Step 3。
+
+#### 路径 B：云端 Agent（需要用户操作）
 
 告诉用户："去你之前的 AI 那里，开一个新对话，把下面这段话发给它。"
 
@@ -84,11 +129,9 @@ description: |
 用清晰的标题格式化所有内容。这些内容将直接导入另一个 AI 的记忆系统，所以写成参考文档的格式，而非对话体。
 ```
 
-告诉用户把两段输出合并，复制回来发给当前助手。
+告诉用户把两段输出合并，复制回来。
 
-### Step 3：接收并清洗
-
-用户把导出内容发回后，进行清洗：
+### Step 3：清洗整理
 
 **保留：**
 - 用户身份信息（姓名、职业、行业）
@@ -97,44 +140,26 @@ description: |
 - 进行中的项目和工作流
 - 结构化偏好（信息怎么组织、怎么呈现）
 - "不要做"的规则
+- 发版/工作流策略
 
 **过滤掉：**
 - 已完成的一次性任务
 - 过时的上下文（已结束的项目等）
 - 过于隐私的信息（除非用户明确要求保留）
-- 来源 Agent 特有的格式/功能引用（如 ChatGPT 的 Custom GPT 配置）
+- 来源 Agent 特有的格式/功能引用
+- API Key、Token 等敏感凭证（绝对不迁移）
 
-### Step 4：整合到 Memory 系统
+### Step 4：确认并写入
 
-将清洗后的内容分类写入 Memory 系统：
+将清洗后的内容分类展示给用户：
 
-- **Facts** — 用户的基本信息、职业、常用工具
-- **Preferences** — 写作风格、结构偏好、避免事项
-- **Projects** — 进行中的项目和工作流
-- **Style** — 沟通方式、语气、用词习惯
+- **身份** — 姓名、职业、行业
+- **偏好** — 写作风格、结构偏好、避免事项
+- **项目** — 进行中的项目和工作流
+- **工具** — 常用工具和平台
+- **规则** — 行为准则和反馈
 
-写入前向用户展示整理后的内容，确认后再存入。
-
-#### 针对 Claude Code 的写入方式
-
-如果目标是 Claude Code，将记忆写入 `~/.claude/projects/<当前项目>/memory/` 目录下：
-- `user.md` — 用户身份、职业、工具偏好
-- `preferences.md` — 写作风格、格式偏好、避免事项
-- `projects.md` — 当前项目和工作流
-- `feedback.md` — 用户反馈过的行为准则
-
-每个文件使用标准 frontmatter 格式：
-```markdown
----
-name: <标题>
-description: <一句话描述>
-type: user | feedback | project | reference
----
-
-<内容>
-```
-
-同时更新 `~/.claude/projects/<项目>/memory/MEMORY.md` 索引。
+用户确认后写入 Memory 系统。
 
 ### Step 5：验证
 
@@ -145,42 +170,23 @@ type: user | feedback | project | reference
 >
 > 有什么需要补充或修改的吗？
 
-## 针对不同来源的适配
+## 来源适配表
 
-### ChatGPT
-- 支持 Custom Instructions 导出
-- 可能有 Memory 功能存储的条目
-- 用户还可以通过 Settings → Data Controls → Export Data 导出完整历史（zip 文件）
-- Custom GPT 配置不要迁移，属于平台特有功能
-
-### Gemini
-- 记忆功能（Gems）较新，存储的条目可能较少
-- 重点从对话历史中提取模式
-- Google Workspace 用户可能有更多集成上下文
-
-### Copilot (GitHub / Microsoft 365)
-- 通常没有持久记忆
-- 主要导出用户的使用习惯和偏好描述
-- 可以从用户的日常工作流中提取 coding 偏好
-
-### Claude（其他实例）
-- 有 Project Instructions 和 Memory 功能
-- 可以直接导出 memory 内容
-- Projects 里的 Instructions 也要一并迁移
-
-### Perplexity
-- 无持久记忆功能
-- 重点提取用户的搜索/研究偏好和常用话题
-
-### 通用（其他 AI 助手）
-- 使用上面的通用 Prompt 1 + Prompt 2
-- 不同 AI 能给出的内容深度不同，接受不完整的结果
-- 鼓励用户手动补充旧 AI 不知道但自己知道的偏好
+| 来源 | 路径 | 用户操作 |
+|------|------|---------|
+| Claude Code | A（本地） | 无需操作，自动扫描 ~/.claude/ |
+| Cursor | A（本地） | 无需操作，自动扫描 ~/.cursor/ 和 .cursorrules |
+| Windsurf | A（本地） | 无需操作，自动扫描 ~/.windsurf/ |
+| ChatGPT | B（云端） | 需要跑两段 prompt |
+| Gemini | B（云端） | 需要跑两段 prompt |
+| Copilot | B（云端） | 需要跑两段 prompt |
+| Claude.ai | B（云端） | 需要从 Memory 页面导出 |
+| Perplexity | B（云端） | 需要跑两段 prompt |
 
 ## 注意事项
 
-- 整个过程中保护用户隐私，不主动追问敏感信息
+- 绝对不迁移 API Key、Token 等凭证信息
 - 导出的内容可能包含旧 Agent 的"幻觉"记忆，清洗时注意甄别
-- 鼓励用户在 Step 3 时自己过一遍，删掉不需要的内容
+- 鼓励用户在确认环节自己过一遍，删掉不需要的内容
 - 迁移完成后应该能自然地使用这些信息，而不是生硬地引用
 - 迁移不是一次性事件——告诉用户后续随时可以补充或修正
