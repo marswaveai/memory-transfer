@@ -1,21 +1,22 @@
 ---
-name: soul-transfer
+name: memory-transfer
 description: |
-  从其他 AI 助手（ChatGPT、Gemini、Copilot 等）迁移记忆和个性化数据到 Cola。
-  触发场景：用户说"我想从 ChatGPT 迁移过来"、"把我的记忆导入 Cola"、"夺舍"、
-  "从其他 AI 搬家"、"import memory"、"迁移数据"、"我之前用的是 ChatGPT/Gemini"。
-  当用户刚从其他 AI 助手切换到 Cola 时使用此 skill，帮助他们零损耗地把积累的上下文带过来。
+  从其他 AI 助手（ChatGPT、Gemini、Copilot、Perplexity 等）迁移记忆和个性化数据。
+  触发场景：用户说"我想从 ChatGPT 迁移过来"、"把我的记忆导入"、"记忆迁移"、
+  "从其他 AI 搬家"、"import memory"、"迁移数据"、"memory transfer"、
+  "我之前用的是 ChatGPT/Gemini/Copilot"、"把我在 XX 上的记忆带过来"。
+  当用户刚从其他 AI 助手切换过来时使用此 skill，帮助他们零损耗地把积累的上下文带过来。
 ---
 
-# 夺舍 — 跨 Agent 记忆迁移
+# 记忆迁移 — 跨 Agent Memory Transfer
 
 ## 原理
 
-用户在其他 AI 助手（ChatGPT、Gemini 等）上积累了大量个性化数据：记忆、偏好、写作风格、工作流程。切换到 Cola 时，这些数据不应丢失。
+用户在其他 AI 助手（ChatGPT、Gemini 等）上积累了大量个性化数据：记忆、偏好、写作风格、工作流程。换助手时，这些数据不应丢失。
 
-"夺舍"通过两步完成迁移：
+记忆迁移通过两步完成：
 1. 在旧 Agent 中用特定 prompt 导出所有记忆
-2. Cola 接收、清洗、整合到自己的 Memory 系统中
+2. 新 Agent 接收、清洗、整合到自己的 Memory 系统中
 
 ## 流程
 
@@ -28,6 +29,7 @@ description: |
 > - Gemini
 > - Copilot
 > - Claude（其他实例）
+> - Perplexity
 > - 其他
 
 根据来源选择对应的导出 prompt。
@@ -82,11 +84,11 @@ description: |
 用清晰的标题格式化所有内容。这些内容将直接导入另一个 AI 的记忆系统，所以写成参考文档的格式，而非对话体。
 ```
 
-告诉用户把两段输出合并，复制回来发给 Cola。
+告诉用户把两段输出合并，复制回来发给当前助手。
 
 ### Step 3：接收并清洗
 
-用户把导出内容发回后，Cola 进行清洗：
+用户把导出内容发回后，进行清洗：
 
 **保留：**
 - 用户身份信息（姓名、职业、行业）
@@ -102,9 +104,9 @@ description: |
 - 过于隐私的信息（除非用户明确要求保留）
 - 来源 Agent 特有的格式/功能引用（如 ChatGPT 的 Custom GPT 配置）
 
-### Step 4：整合到 Cola Memory
+### Step 4：整合到 Memory 系统
 
-将清洗后的内容分类写入 Cola 的 Memory 系统：
+将清洗后的内容分类写入 Memory 系统：
 
 - **Facts** — 用户的基本信息、职业、常用工具
 - **Preferences** — 写作风格、结构偏好、避免事项
@@ -113,11 +115,32 @@ description: |
 
 写入前向用户展示整理后的内容，确认后再存入。
 
+#### 针对 Claude Code 的写入方式
+
+如果目标是 Claude Code，将记忆写入 `~/.claude/projects/<当前项目>/memory/` 目录下：
+- `user.md` — 用户身份、职业、工具偏好
+- `preferences.md` — 写作风格、格式偏好、避免事项
+- `projects.md` — 当前项目和工作流
+- `feedback.md` — 用户反馈过的行为准则
+
+每个文件使用标准 frontmatter 格式：
+```markdown
+---
+name: <标题>
+description: <一句话描述>
+type: user | feedback | project | reference
+---
+
+<内容>
+```
+
+同时更新 `~/.claude/projects/<项目>/memory/MEMORY.md` 索引。
+
 ### Step 5：验证
 
-整合完成后，Cola 主动展示：
+整合完成后，主动展示：
 
-> 叽整理好了。现在叽知道的关于你的事：
+> 整理好了。现在我知道的关于你的事：
 > （简要列出关键信息）
 >
 > 有什么需要补充或修改的吗？
@@ -128,22 +151,36 @@ description: |
 - 支持 Custom Instructions 导出
 - 可能有 Memory 功能存储的条目
 - 用户还可以通过 Settings → Data Controls → Export Data 导出完整历史（zip 文件）
+- Custom GPT 配置不要迁移，属于平台特有功能
 
 ### Gemini
-- 记忆功能较新，存储的条目可能较少
+- 记忆功能（Gems）较新，存储的条目可能较少
 - 重点从对话历史中提取模式
+- Google Workspace 用户可能有更多集成上下文
 
-### Copilot
+### Copilot (GitHub / Microsoft 365)
 - 通常没有持久记忆
 - 主要导出用户的使用习惯和偏好描述
+- 可以从用户的日常工作流中提取 coding 偏好
 
 ### Claude（其他实例）
 - 有 Project Instructions 和 Memory 功能
 - 可以直接导出 memory 内容
+- Projects 里的 Instructions 也要一并迁移
+
+### Perplexity
+- 无持久记忆功能
+- 重点提取用户的搜索/研究偏好和常用话题
+
+### 通用（其他 AI 助手）
+- 使用上面的通用 Prompt 1 + Prompt 2
+- 不同 AI 能给出的内容深度不同，接受不完整的结果
+- 鼓励用户手动补充旧 AI 不知道但自己知道的偏好
 
 ## 注意事项
 
 - 整个过程中保护用户隐私，不主动追问敏感信息
 - 导出的内容可能包含旧 Agent 的"幻觉"记忆，清洗时注意甄别
 - 鼓励用户在 Step 3 时自己过一遍，删掉不需要的内容
-- 迁移完成后，Cola 应该能自然地使用这些信息，而不是生硬地引用
+- 迁移完成后应该能自然地使用这些信息，而不是生硬地引用
+- 迁移不是一次性事件——告诉用户后续随时可以补充或修正
