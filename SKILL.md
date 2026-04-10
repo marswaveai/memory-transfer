@@ -1,10 +1,10 @@
 ---
 name: memory-transfer
 description: |
-  从其他 AI 助手（ChatGPT、Gemini、Copilot、Perplexity 等）迁移记忆和个性化数据。
+  从其他 AI 助手（ChatGPT、Gemini、Copilot、OpenClaw、Perplexity 等）迁移记忆和个性化数据。
   触发场景：用户说"我想从 ChatGPT 迁移过来"、"把我的记忆导入"、"记忆迁移"、
   "从其他 AI 搬家"、"import memory"、"迁移数据"、"memory transfer"、
-  "我之前用的是 ChatGPT/Gemini/Copilot"、"把我在 XX 上的记忆带过来"。
+  "我之前用的是 ChatGPT/Gemini/Copilot/OpenClaw"、"把我在 XX 上的记忆带过来"。
   当用户刚从其他 AI 助手切换过来时使用此 skill，帮助他们零损耗地把积累的上下文带过来。
 ---
 
@@ -15,7 +15,7 @@ description: |
 用户在其他 AI 助手上积累了大量个性化数据：记忆、偏好、写作风格、工作流程。换助手时，这些数据不应丢失。
 
 记忆迁移有两条路径：
-- **本地 Agent**（Claude Code、Cursor、Windsurf 等）：直接读取本地文件，零操作
+- **本地 Agent**（Claude Code、Cursor、Windsurf、OpenClaw 等）：直接读取本地文件，零操作
 - **云端 Agent**（ChatGPT、Gemini 等）：通过 prompt 导出，用户复制回来
 
 ## 流程
@@ -69,6 +69,28 @@ cat ~/.windsurf/rules/*.md 2>/dev/null
 cat .windsurfrules 2>/dev/null
 ```
 
+**OpenClaw：**
+```bash
+# 共享配置（如果有）
+cat ~/.openclaw/openclaw.json 2>/dev/null
+
+# 发现 OpenClaw workspace，并提取默认记忆、daily memory、工作区规则
+find ~ -maxdepth 5 -name "openclaw.json" 2>/dev/null | while read f; do
+  root="$(dirname "$f")"
+  echo "=== OPENCLAW WORKSPACE: $root ==="
+  echo "--- $f ---"
+  cat "$f"
+  echo "--- $root/AGENTS.md ---"
+  cat "$root/AGENTS.md" 2>/dev/null
+  echo "--- $root/MEMORY.md ---"
+  cat "$root/MEMORY.md" 2>/dev/null
+  find "$root/memory" -name "*.md" -type f 2>/dev/null | sort | tail -n 30 | while read m; do
+    echo "--- $m ---"
+    cat "$m"
+  done
+done
+```
+
 **通用（任何使用 AGENT.md / CLAUDE.md 的工具）：**
 ```bash
 find ~ -maxdepth 4 -name "AGENT.md" -o -name "CLAUDE.md" 2>/dev/null | while read f; do
@@ -78,6 +100,12 @@ done
 ```
 
 提取完成后直接进入 Step 3。
+
+OpenClaw 的提取优先级：
+- `MEMORY.md` 是默认记忆，优先作为稳定事实和长期偏好来源
+- `memory/YYYY-MM-DD.md` 是 daily memory，用来补充近期项目、工作流和最近稳定下来的偏好
+- `AGENTS.md` 和 `openclaw.json` 用来恢复记忆写法、过滤规则和行为约束
+- `logs/message-archive-raw/` 只在默认记忆不足，或者用户明确要求更深度恢复历史模式时再读；它更适合补证据，不适合整库无差别灌入
 
 #### 路径 B：云端 Agent（需要用户操作）
 
@@ -177,6 +205,7 @@ done
 | Claude Code | A（本地） | 无需操作，自动扫描 ~/.claude/ |
 | Cursor | A（本地） | 无需操作，自动扫描 ~/.cursor/ 和 .cursorrules |
 | Windsurf | A（本地） | 无需操作，自动扫描 ~/.windsurf/ |
+| OpenClaw | A（本地） | 无需操作，自动扫描 openclaw.json 所在 workspace、`MEMORY.md` 和 recent daily memory |
 | ChatGPT | B（云端） | 需要跑两段 prompt |
 | Gemini | B（云端） | 需要跑两段 prompt |
 | Copilot | B（云端） | 需要跑两段 prompt |
@@ -190,3 +219,4 @@ done
 - 鼓励用户在确认环节自己过一遍，删掉不需要的内容
 - 迁移完成后应该能自然地使用这些信息，而不是生硬地引用
 - 迁移不是一次性事件——告诉用户后续随时可以补充或修正
+- 从 OpenClaw 迁移时，不要把整库 raw archive 当成默认输入；优先读 `MEMORY.md` 和 recent daily memory，再按需回看 archive
